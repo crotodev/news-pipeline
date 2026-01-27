@@ -1,6 +1,9 @@
 [submodule "news-streamer"]
-	path = news-streamer
+	path = services/news-streamer
 	url = https://github.com/crotodev/news-streamer.git
 [submodule "news-scraper"]
-	path = news-scraper
+	path = services/news-scraper
 	url = https://github.com/crotodev/news-scraper.git
+[submodule "news-models-deployment"]
+	path = services/news-models-deployment
+	url = https://github.com/crotodev/news-models-deployment.git
