@@ -1,0 +1,32 @@
+digraph NewsPipeline {
+    rankdir=LR;
+
+    node [shape=box, style="rounded"];
+
+    Sources [label="News Sources"];
+    Scraper [label="Scraper / Collector\n(newspaper3k)"];
+
+    Kafka [shape=cylinder, label="Kafka Broker\nTopics:\n- raw_news\n- enriched_news"];
+
+    SparkParse [label="Spark Structured Streaming\nRead raw_news\nParse JSON + Clean Text"];
+    SentimentPrep [label="Build text_for_sentiment\n(summary > title > text)\ntruncate"];
+    SentimentAPI [label="Sentiment API\n(Flask + DistilBERT)"];
+    Join [label="Join sentiment\non url_hash"];
+
+    Next [label="Downstream Consumer\n(Postgres / Dashboard / ML)"];
+
+    Parquet [shape=cylinder, style="dashed", label="Optional Parquet Sink"];
+
+    Sources -> Scraper;
+    Scraper -> Kafka [label="raw_news"];
+
+    Kafka -> SparkParse;
+    SparkParse -> SentimentPrep;
+    SentimentPrep -> SentimentAPI;
+    SentimentAPI -> Join;
+
+    Join -> Kafka [label="enriched_news"];
+    Kafka -> Next;
+
+    Join -> Parquet [style=dashed];
+}
