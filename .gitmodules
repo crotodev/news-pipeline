@@ -7,3 +7,9 @@
 [submodule "news-models-deployment"]
   path = services/news-models-deployment
   url = https://github.com/crotodev/news-models-deployment.git
+[submodule "model-training/news-sentiment-analysis"]
+	path = model-training/news-sentiment-analysis
+	url = https://github.com/crotodev/news-sentiment-analysis
+[submodule "model-training/news-classifier"]
+	path = model-training/news-classifier
+	url = https://github.com/crotodev/news-classifier.git
