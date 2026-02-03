@@ -4,12 +4,12 @@
 [submodule "news-scraper"]
   path = services/news-scraper
   url = https://github.com/crotodev/news-scraper.git
-[submodule "news-models-deployment"]
-  path = services/news-models-deployment
-  url = https://github.com/crotodev/news-models-deployment.git
 [submodule "model-training/news-sentiment-analysis"]
 	path = model-training/news-sentiment-analysis
 	url = https://github.com/crotodev/news-sentiment-analysis
 [submodule "model-training/news-classifier"]
 	path = model-training/news-classifier
 	url = https://github.com/crotodev/news-classifier.git
+[submodule "services/news-model-api"]
+	path = services/news-model-api
+	url = https://github.com/crotodev/news-model-api.git
