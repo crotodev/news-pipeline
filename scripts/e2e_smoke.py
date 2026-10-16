@@ -43,27 +43,43 @@ def main() -> int:
 
     article = build_article()
 
-    consumer = KafkaConsumer(
-        "enriched_news",
-        bootstrap_servers=args.bootstrap_servers,
-        auto_offset_reset="latest",
-        group_id=f"e2e-smoke-{uuid.uuid4()}",
-        value_deserializer=lambda b: json.loads(b.decode("utf-8")),
-        consumer_timeout_ms=5000,
-    )
+    deadline = time.time() + args.timeout
+
+    try:
+        consumer = KafkaConsumer(
+            "enriched_news",
+            bootstrap_servers=args.bootstrap_servers,
+            auto_offset_reset="latest",
+            group_id=f"e2e-smoke-{uuid.uuid4()}",
+            value_deserializer=lambda b: json.loads(b.decode("utf-8")),
+            consumer_timeout_ms=5000,
+        )
+    except Exception as exc:
+        print(f"[smoke] FAIL: could not connect consumer: {exc}")
+        return 1
+
     # Join the group and get partitions assigned before producing.
     while not consumer.assignment():
+        if time.time() >= deadline:
+            print(
+                f"[smoke] FAIL: consumer not assigned partitions within {args.timeout}s "
+                f"(is Kafka up at {args.bootstrap_servers}?)"
+            )
+            return 1
         consumer.poll(timeout_ms=1000)
 
-    producer = KafkaProducer(
-        bootstrap_servers=args.bootstrap_servers,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    )
-    producer.send("raw_news", article).get(timeout=30)
-    producer.flush()
-    print(f"[smoke] produced url_hash={article['url_hash']}")
+    try:
+        producer = KafkaProducer(
+            bootstrap_servers=args.bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
+        producer.send("raw_news", article).get(timeout=30)
+        producer.flush()
+    except Exception as exc:
+        print(f"[smoke] FAIL: could not produce to raw_news: {exc}")
+        return 1
 
-    deadline = time.time() + args.timeout
+    print(f"[smoke] produced url_hash={article['url_hash']}")
     while time.time() < deadline:
         for message in consumer:
             value = message.value
