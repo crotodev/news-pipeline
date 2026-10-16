@@ -45,60 +45,68 @@ def main() -> int:
 
     deadline = time.time() + args.timeout
 
+    consumer = None
+    producer = None
     try:
-        consumer = KafkaConsumer(
-            "enriched_news",
-            bootstrap_servers=args.bootstrap_servers,
-            auto_offset_reset="latest",
-            group_id=f"e2e-smoke-{uuid.uuid4()}",
-            value_deserializer=lambda b: json.loads(b.decode("utf-8")),
-            consumer_timeout_ms=5000,
-        )
-    except Exception as exc:
-        print(f"[smoke] FAIL: could not connect consumer: {exc}")
-        return 1
-
-    # Join the group and get partitions assigned before producing.
-    while not consumer.assignment():
-        if time.time() >= deadline:
-            print(
-                f"[smoke] FAIL: consumer not assigned partitions within {args.timeout}s "
-                f"(is Kafka up at {args.bootstrap_servers}?)"
+        try:
+            consumer = KafkaConsumer(
+                "enriched_news",
+                bootstrap_servers=args.bootstrap_servers,
+                auto_offset_reset="latest",
+                group_id=f"e2e-smoke-{uuid.uuid4()}",
+                value_deserializer=lambda b: json.loads(b.decode("utf-8")),
+                consumer_timeout_ms=5000,
             )
+        except Exception as exc:
+            print(f"[smoke] FAIL: could not connect consumer: {exc}")
             return 1
-        consumer.poll(timeout_ms=1000)
 
-    try:
-        producer = KafkaProducer(
-            bootstrap_servers=args.bootstrap_servers,
-            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-        )
-        producer.send("raw_news", article).get(timeout=30)
-        producer.flush()
-    except Exception as exc:
-        print(f"[smoke] FAIL: could not produce to raw_news: {exc}")
-        return 1
-
-    print(f"[smoke] produced url_hash={article['url_hash']}")
-    while time.time() < deadline:
-        for message in consumer:
-            value = message.value
-            if value.get("url_hash") != article["url_hash"]:
-                continue
-            print(f"[smoke] enriched: {json.dumps(value, indent=2)}")
-            problems = []
-            if not value.get("sentiment_label"):
-                problems.append(f"sentiment missing: {value.get('sentiment_error')}")
-            if not value.get("category_label"):
-                problems.append(f"category missing: {value.get('category_error')}")
-            if problems:
-                print("[smoke] FAIL: " + "; ".join(problems))
+        # Join the group and get partitions assigned before producing.
+        while not consumer.assignment():
+            if time.time() >= deadline:
+                print(
+                    f"[smoke] FAIL: consumer not assigned partitions within {args.timeout}s "
+                    f"(is Kafka up at {args.bootstrap_servers}?)"
+                )
                 return 1
-            print("[smoke] PASS")
-            return 0
+            consumer.poll(timeout_ms=1000)
 
-    print(f"[smoke] FAIL: no enriched message within {args.timeout}s")
-    return 1
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=args.bootstrap_servers,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            )
+            producer.send("raw_news", article).get(timeout=30)
+            producer.flush()
+        except Exception as exc:
+            print(f"[smoke] FAIL: could not produce to raw_news: {exc}")
+            return 1
+
+        print(f"[smoke] produced url_hash={article['url_hash']}")
+        while time.time() < deadline:
+            for message in consumer:
+                value = message.value
+                if value.get("url_hash") != article["url_hash"]:
+                    continue
+                print(f"[smoke] enriched: {json.dumps(value, indent=2)}")
+                problems = []
+                if not value.get("sentiment_label"):
+                    problems.append(f"sentiment missing: {value.get('sentiment_error')}")
+                if not value.get("category_label"):
+                    problems.append(f"category missing: {value.get('category_error')}")
+                if problems:
+                    print("[smoke] FAIL: " + "; ".join(problems))
+                    return 1
+                print("[smoke] PASS")
+                return 0
+
+        print(f"[smoke] FAIL: no enriched message within {args.timeout}s")
+        return 1
+    finally:
+        if producer is not None:
+            producer.close()
+        if consumer is not None:
+            consumer.close()
 
 
 if __name__ == "__main__":

@@ -44,5 +44,9 @@ Per-service tests:
 ```bash
 docker build --target test -t news-streamer-test services/news-streamer && docker run --rm news-streamer-test
 docker build --target test -t news-scraper-test services/news-scraper && docker run --rm news-scraper-test
+py -3.11 -m venv services/news-model-api/.venv
+services/news-model-api/.venv/Scripts/python -m pip install -r services/news-model-api/requirements.txt -r services/news-model-api/requirements-dev.txt
 cd services/news-model-api && .venv/Scripts/python -m pytest
 ```
+
+On macOS/Linux use `python3.11` and `.venv/bin/python` instead of `py -3.11` and `.venv/Scripts/python`.
