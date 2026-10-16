@@ -5,6 +5,8 @@
 #   docker compose ps             # Check service health
 #   docker compose logs -f kafka  # Tail logs for a service
 #   docker compose down -v        # Stop and remove volumes
+#   docker compose --profile scrape run --rm news-scraper   # Crawl news into raw_news
+#   python scripts/e2e_smoke.py                             # Verify end-to-end flow
 #
 # Prerequisites:
 #   - Models must be available in ./services/news-model-api/models/
@@ -110,11 +112,8 @@ services:
       - MAX_CHARS_PER_ITEM=${MAX_CHARS_PER_ITEM:-5000}
       - RETURN_TOP_K=${RETURN_TOP_K:-3}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    depends_on:
-      kafka:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -127,6 +126,59 @@ services:
         reservations:
           memory: 2G
 
+  # ---------------------------------------------------------------------------
+  # News Streamer (PySpark: raw_news -> model API -> enriched_news + Parquet)
+  # ---------------------------------------------------------------------------
+  news-streamer:
+    build:
+      context: ./services/news-streamer
+      dockerfile: Dockerfile
+      target: production
+    container_name: news-pipeline-streamer
+    command:
+      - python
+      - stream.py
+      - --bootstrap-servers
+      - kafka:29092
+      - --checkpoint-location
+      - /app/data/checkpoints/raw_news
+      - --parquet-output-dir
+      - /app/data/parquet/news_enriched
+      - --write-kafka
+      - --starting-offsets
+      - earliest
+    environment:
+      - API_BASE_URL=http://news-model-api:9000
+      - API_READY_MAX_WAIT_S=180
+    volumes:
+      - streamer-data:/app/data
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      news-model-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # News Scraper (one-shot crawl -> raw_news). Run explicitly:
+  #   docker compose --profile scrape run --rm news-scraper
+  # ---------------------------------------------------------------------------
+  news-scraper:
+    build:
+      context: ./services/news-scraper
+      dockerfile: Dockerfile
+      target: production
+    container_name: news-pipeline-scraper
+    profiles: ["scrape"]
+    environment:
+      SINK_CLASS: news_scraper.sinks.kafka.KafkaSink
+      SINK_SETTINGS: '{"bootstrap_servers": "kafka:29092", "topic": "raw_news"}'
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    restart: "no"
+
 volumes:
   kafka-data:
   mongo-data:
+  streamer-data:
