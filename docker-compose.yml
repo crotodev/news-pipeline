@@ -150,6 +150,14 @@ services:
     environment:
       - API_BASE_URL=http://news-model-api:9000
       - API_READY_MAX_WAIT_S=180
+      # Optional analysis via an externally managed Ollama instance.
+      - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-}
+      - OLLAMA_TIMEOUT_S=${OLLAMA_TIMEOUT_S:-180}
+      - OLLAMA_CHUNK_CHARS=${OLLAMA_CHUNK_CHARS:-6000}
+      - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-8192}
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
     volumes:
       - streamer-data:/app/data
     depends_on:

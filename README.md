@@ -39,6 +39,30 @@ docker compose --profile scrape run --rm news-scraper
 
 Enriched articles are published to the `enriched_news` topic and written as Parquet to the `streamer-data` volume.
 
+### Enable local Ollama analysis (optional)
+
+The streamer can add a structured analysis of the entire extracted article body using a separately managed Ollama instance. It is disabled by default. Install [Ollama](https://ollama.com/download), choose a model that fits your RAM/VRAM, and replace `your-model:tag` with its actual name:
+
+```powershell
+ollama pull your-model:tag
+# Run in another terminal if the Ollama app/service is not already serving:
+ollama serve
+```
+
+Then recreate the streamer with analysis enabled:
+
+```powershell
+$env:OLLAMA_ENABLED = "true"
+$env:OLLAMA_MODEL = "your-model:tag"
+docker compose up -d --build news-streamer
+```
+
+Compose defaults to `http://host.docker.internal:11434` to reach Ollama on the Docker Desktop host. Override `OLLAMA_BASE_URL` for another reachable server. When running the streamer directly on the host, the default is `http://localhost:11434`. This stack does not start Ollama or download models.
+
+Long articles are analyzed in segments and the observations are synthesized. This adds local CPU/GPU work and batch latency. The context budget is checked explicitly; oversized tokens or synthesis prompts produce an article error rather than a silently truncated result. Ollama failures are recorded in `llm_error`, and articles continue to Kafka/Parquet. Enriched records include `llm_analysis`, `llm_model`, `llm_inferred_at`, and `llm_error`; all four are null when disabled. See the [streamer setup and settings](services/news-streamer/README.md#optional-full-article-analysis-with-ollama) for all seven environment variables, context limits, and output fields.
+
+To opt out, set `$env:OLLAMA_ENABLED = "false"` and run `docker compose up -d news-streamer` again.
+
 Per-service tests:
 
 ```bash
