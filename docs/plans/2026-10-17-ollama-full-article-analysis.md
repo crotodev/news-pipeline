@@ -77,7 +77,7 @@ Cover:
 - Request uses configured model, `/api/chat`, JSON format, temperature 0, configured context, and timeout.
 - Valid result parsing and required-field validation.
 - Empty text, HTTP failure, Ollama error payload, malformed JSON, and missing fields return an error result for that article.
-- Results retain the original `url_hash` so Spark can join them deterministically.
+- Results retain the original `url_hash` as the primary article key and nullable `fingerprint` as the content-version key so Spark can join them deterministically without mixing versions of one URL.
 
 Mock HTTP; tests must not require Ollama to be installed or running.
 
@@ -117,7 +117,7 @@ Expected: PASS.
 
 Verify that:
 - When disabled, no Ollama call occurs and output fields are null.
-- When enabled, the streamer sends `text_for_llm`, joins LLM results by `url_hash`, and retains all existing ONNX output fields.
+- When enabled, the streamer sends `text_for_llm`, joins LLM results by primary key `url_hash` plus null-safe `fingerprint` equality, and retains all existing ONNX output fields.
 - A per-article Ollama error is recorded while the article still reaches sinks.
 - Kafka JSON includes all four LLM fields, with explicit nulls when disabled.
 
@@ -129,7 +129,7 @@ Expected: new assertions fail before wiring is added.
 
 **Step 3: Wire the optional call into `foreachBatch`**
 
-Add `call_ollama_analysis` parallel to existing sentiment/classification functions. Pass full text, configured model, URL, limits, context, and timeout. Join LLM results to the enriched DataFrame on `url_hash`. Skip the HTTP work entirely when disabled while adding null-valued schema columns. Include LLM failures in batch error counts/logs without logging content.
+Add `call_ollama_analysis` parallel to existing sentiment/classification functions. Pass full text, configured model, URL, limits, context, and timeout. Join LLM results to the enriched DataFrame on primary key `url_hash` plus null-safe `fingerprint` equality. Preserve `fingerprint` through the partition adapter and result schema, because a microbatch can retain several content versions of one URL. Verify both multiple fingerprints for one URL and a null fingerprint without row multiplication or analysis cross-attribution. Skip the HTTP work entirely when disabled while adding null-valued schema columns. Include LLM failures in batch error counts/logs without logging content.
 
 **Step 4: Re-run the focused tests**
 
